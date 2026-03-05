@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Control de Gastos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{display:['Syne','sans-serif'],body:['DM Sans','sans-serif']}}}};
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:'DM Sans',sans-serif}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+.fade-in{animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.tab-on{border-bottom:2px solid #fff;color:#fff}
+.tab-off{border-bottom:2px solid transparent;color:#93c5fd}
+.tab-off:hover{color:#fff}
+</style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100">
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useMemo,useCallback} = React;
+
+// ── CONSTANTS ──────────────────────────────────────────────
+const MONTHS_ES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTHS_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CATS=['Vivienda','Tarjetas CA','Tarjetas MX','Créditos Auto','Seguros','Préstamos','Telecom','Terrenos MX','Suscripciones','Imprevistos'];
+const FREQS=['Mensual','Biweekly','Bimestral','Semestral','Anual','Variable'];
+const STATUSES=['Pendiente','Pagado','Vencido'];
+const ACCTS=['TD Chequing','Neo Chequing','Efectivo','BBVA México'];
+const CAT_CLR={
+  'Vivienda':'#1d4ed8','Tarjetas CA':'#7c3aed','Tarjetas MX':'#be185d',
+  'Créditos Auto':'#0369a1','Seguros':'#0d9488','Préstamos':'#b45309',
+  'Telecom':'#4338ca','Terrenos MX':'#15803d','Suscripciones':'#dc2626','Imprevistos':'#64748b'
+};
+const CAT_ICO={
+  'Vivienda':'🏠','Tarjetas CA':'💳','Tarjetas MX':'🇲🇽','Créditos Auto':'🚗',
+  'Seguros':'🛡️','Préstamos':'🏦','Telecom':'📡','Terrenos MX':'🌎',
+  'Suscripciones':'📺','Imprevistos':'⚡'
+};
+
+const TR={
+  es:{appTitle:'Control de Gastos',dashboard:'Dashboard',expenses:'Gastos',history:'Historial',setup:'⚙',
+      totalOwed:'Total Adeudado',toPay:'A Pagar',paid:'Pagado',pending:'Pendiente',overdue:'Vencido',
+      search:'Buscar...',allCats:'Todas las categorías',allStatus:'Todos los estados',
+      name:'Concepto',amount:'Monto',payDay:'Día',freq:'Frecuencia',account:'Cuenta',
+      notes:'Notas',actions:'',status:'Estado',totalOwedF:'Total Adeudado',currency:'Moneda',
+      addExp:'+ Nuevo Gasto',editExp:'Editar Gasto',save:'Guardar',cancel:'Cancelar',
+      deleteQ:'¿Eliminar este concepto?',deleteBtn:'Eliminar',
+      q1:'Quincena 1 (1–15)',q2:'Quincena 2 (16–fin)',allMonth:'Todo el mes',
+      rate:'Tipo de cambio MXN → CAD',updateRate:'Aplicar',
+      alerts:'⚠ Próximos a vencer',dueToday:'Hoy',dueTomorrow:'Mañana',dueIn:'En',days:'días',
+      progress:'Progreso del período',byCategory:'Por categoría',
+      apiConfig:'Conectar Google Sheets',apiUrl:'URL de Apps Script',
+      apiSave:'Guardar',apiSync:'↻ Sincronizar',
+      demo:'Modo Demo · Configura Google Sheets para compartir entre dispositivos',
+      noData:'Sin datos para este período',
+      histTitle:'Historial de Períodos',newPeriod:'Nuevo Período',
+      confirmPeriod:'¿Archivar el período actual y reiniciar estados?',
+      paidOf:'pagados de',allPaid:'✓ ¡Todo pagado!',
+      syncOk:'Sincronizado ✓',syncFail:'Error al sincronizar',
+      nameReq:'* El nombre es requerido',items:'items',
+      histTotal:'Total pagado',instructions:'Instrucciones paso a paso',copyCode:'📋 Copiar código',copied:'✓ Copiado'},
+  en:{appTitle:'Expense Tracker',dashboard:'Dashboard',expenses:'Expenses',history:'History',setup:'⚙',
+      totalOwed:'Total Owed',toPay:'To Pay',paid:'Paid',pending:'Pending',overdue:'Overdue',
+      search:'Search...',allCats:'All categories',allStatus:'All statuses',
+      name:'Concept',amount:'Amount',payDay:'Day',freq:'Frequency',account:'Account',
+      notes:'Notes',actions:'',status:'Status',totalOwedF:'Total Owed',currency:'Currency',
+      addExp:'+ New Expense',editExp:'Edit Expense',save:'Save',cancel:'Cancel',
+      deleteQ:'Delete this item?',deleteBtn:'Delete',
+      q1:'Bi-week 1 (1–15)',q2:'Bi-week 2 (16–end)',allMonth:'Full Month',
+      rate:'Exchange Rate MXN → CAD',updateRate:'Apply',
+      alerts:'⚠ Upcoming Due',dueToday:'Today',dueTomorrow:'Tomorrow',dueIn:'In',days:'days',
+      progress:'Period Progress',byCategory:'By Category',
+      apiConfig:'Connect Google Sheets',apiUrl:'Apps Script URL',
+      apiSave:'Save',apiSync:'↻ Sync',
+      demo:'Demo Mode · Set up Google Sheets to share across devices',
+      noData:'No data for this period',
+      histTitle:'Period History',newPeriod:'New Period',
+      confirmPeriod:'Archive current period and reset statuses?',
+      paidOf:'paid of',allPaid:'✓ All paid!',
+      syncOk:'Synced ✓',syncFail:'Sync failed',
+      nameReq:'* Name is required',items:'items',
+      histTotal:'Total paid',instructions:'Step-by-step instructions',copyCode:'📋 Copy code',copied:'✓ Copied'}
+};
+
+const SCRIPT_CODE=`const SHEET='Gastos', HIST='Historial';
+function doGet(e){
+  const a=e.parameter.action||'read',ss=SpreadsheetApp.getActiveSpreadsheet();
+  if(a==='read'){
+    const sh=ss.getSheetByName(SHEET)||ss.insertSheet(SHEET);
+    const rows=sh.getDataRange().getValues();
+    if(rows.length<2)return ok({expenses:[]});
+    const h=rows[0];
+    return ok({expenses:rows.slice(1).map(r=>{const o={};h.forEach((k,i)=>o[k]=r[i]);return o;})});
+  }
+  if(a==='write'){
+    const d=JSON.parse(decodeURIComponent(e.parameter.data));
+    const sh=ss.getSheetByName(SHEET)||ss.insertSheet(SHEET);
+    sh.clearContents();
+    sh.appendRow(Object.keys(d[0]));
+    d.forEach(r=>sh.appendRow(Object.values(r)));
+    return ok({ok:true});
+  }
+  if(a==='history'){
+    const d=JSON.parse(decodeURIComponent(e.parameter.data));
+    const sh=ss.getSheetByName(HIST)||ss.insertSheet(HIST);
+    if(sh.getLastRow()===0)sh.appendRow(['month','year','totalPaid','snapshot']);
+    sh.appendRow([d.month,d.year,d.totalPaid,JSON.stringify(d.items)]);
+    return ok({ok:true});
+  }
+  return ok({error:'unknown'});
+}
+function ok(d){return ContentService.createTextOutput(JSON.stringify(d)).setMimeType(ContentService.MimeType.JSON);}`;
+
+const INIT=[
+  {id:'e001',name:'Renta',           cat:'Vivienda',     amt:1600,   cur:'CAD',freq:'Mensual',  day:1,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e002',name:'Hydro',           cat:'Vivienda',     amt:190,    cur:'CAD',freq:'Mensual',  day:17, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e003',name:'Water Bill',      cat:'Vivienda',     amt:180,    cur:'CAD',freq:'Bimestral',day:29, owed:0,st:'Pendiente',acct:'TD Chequing', notes:'Bimestral'},
+  {id:'e004',name:'Vmedia Internet', cat:'Vivienda',     amt:108,    cur:'CAD',freq:'Mensual',  day:1,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e005',name:'Canadian Tire',   cat:'Tarjetas CA',  amt:0,      cur:'CAD',freq:'Mensual',  day:3,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e006',name:'Neo Financial',   cat:'Tarjetas CA',  amt:0,      cur:'CAD',freq:'Mensual',  day:28, owed:0,st:'Pendiente',acct:'Neo Chequing',notes:''},
+  {id:'e007',name:'Simplii',         cat:'Tarjetas CA',  amt:0,      cur:'CAD',freq:'Mensual',  day:7,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e008',name:'TD Card',         cat:'Tarjetas CA',  amt:0,      cur:'CAD',freq:'Mensual',  day:11, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e009',name:'Westjet RBC',     cat:'Tarjetas CA',  amt:0,      cur:'CAD',freq:'Mensual',  day:12, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e010',name:'Walmart Rewards', cat:'Tarjetas CA',  amt:0,      cur:'CAD',freq:'Mensual',  day:1,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e011',name:'NU México',       cat:'Tarjetas MX',  amt:0,      cur:'MXN',freq:'Mensual',  day:8,  owed:0,st:'Pendiente',acct:'BBVA México', notes:'Vía RemitBee'},
+  {id:'e012',name:'BBVA / Kary',     cat:'Tarjetas MX',  amt:0,      cur:'MXN',freq:'Mensual',  day:7,  owed:0,st:'Pendiente',acct:'BBVA México', notes:'Vía RemitBee'},
+  {id:'e013',name:'Acura (Birchwood)',cat:'Créditos Auto',amt:350,   cur:'CAD',freq:'Biweekly', day:1,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:'Días ~1 y 15'},
+  {id:'e014',name:'Durango',         cat:'Créditos Auto',amt:450,    cur:'CAD',freq:'Biweekly', day:8,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:'Días ~8 y 22'},
+  {id:'e015',name:'Seguro Camionetas',cat:'Seguros',     amt:300,    cur:'CAD',freq:'Mensual',  day:5,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e016',name:'Seguro Acura',    cat:'Seguros',      amt:300,    cur:'CAD',freq:'Mensual',  day:1,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e017',name:'MPI',             cat:'Seguros',      amt:90,     cur:'CAD',freq:'Mensual',  day:3,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e018',name:'Fairstone',       cat:'Préstamos',    amt:140,    cur:'CAD',freq:'Biweekly', day:1,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:'Días 1 y 16'},
+  {id:'e019',name:'Affirm #1',       cat:'Préstamos',    amt:47.61,  cur:'CAD',freq:'Mensual',  day:17, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e020',name:'Affirm #2',       cat:'Préstamos',    amt:38.04,  cur:'CAD',freq:'Mensual',  day:28, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e021',name:'Bell',            cat:'Telecom',      amt:375,    cur:'CAD',freq:'Mensual',  day:28, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e022',name:'Rogers',          cat:'Telecom',      amt:188,    cur:'CAD',freq:'Mensual',  day:22, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e023',name:'Celulares',       cat:'Telecom',      amt:168,    cur:'CAD',freq:'Mensual',  day:13, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e024',name:'Urbanización',    cat:'Terrenos MX',  amt:1250,   cur:'MXN',freq:'Mensual',  day:1,  owed:0,st:'Pendiente',acct:'BBVA México', notes:'Vía RemitBee'},
+  {id:'e025',name:'Stitco',          cat:'Terrenos MX',  amt:50,     cur:'CAD',freq:'Mensual',  day:27, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e026',name:'Amazon Prime',    cat:'Suscripciones',amt:13.29,  cur:'CAD',freq:'Mensual',  day:3,  owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e027',name:'Netflix',         cat:'Suscripciones',amt:20,     cur:'CAD',freq:'Mensual',  day:15, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e028',name:'Disney+',         cat:'Suscripciones',amt:15,     cur:'CAD',freq:'Mensual',  day:15, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e029',name:'PSN',             cat:'Suscripciones',amt:17.99,  cur:'CAD',freq:'Mensual',  day:15, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+  {id:'e030',name:'Game Pass',       cat:'Suscripciones',amt:16.99,  cur:'CAD',freq:'Mensual',  day:15, owed:0,st:'Pendiente',acct:'TD Chequing', notes:''},
+];
+
+// ── HELPERS ────────────────────────────────────────────────
+const fmtC=(n,c)=>{
+  const v=Math.abs(Number(n)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return c==='MXN'?`$${v} MXN`:`C$${v}`;
+};
+const toCAD=(a,c,r)=>c==='MXN'?Number(a)*r:Number(a);
+const genId=()=>'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const stCls=(s)=>s==='Pagado'?'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300':
+  s==='Vencido'?'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300':
+  'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+const inPeriod=(e,v)=>v==='all'?true:v==='q1'?(e.day<=15||e.freq==='Biweekly'):v==='q2'?(e.day>15||e.freq==='Biweekly'):true;
+
+// ── MODAL ─────────────────────────────────────────────────
+function Modal({title,onClose,children}){
+  useEffect(()=>{
+    const h=ev=>{if(ev.key==='Escape')onClose();};
+    window.addEventListener('keydown',h);
+    return()=>window.removeEventListener('keydown',h);
+  },[]);
+  return(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fade-in">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+          <span className="font-display font-bold text-slate-800 dark:text-slate-100 text-base">{title}</span>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 text-xl transition">&times;</button>
+        </div>
+        <div className="p-6 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── EXPENSE FORM ──────────────────────────────────────────
+function ExpForm({init,onSave,onCancel,t}){
+  const blank={id:'',name:'',cat:'Vivienda',amt:'',cur:'CAD',freq:'Mensual',day:'1',owed:'',st:'Pendiente',acct:'TD Chequing',notes:''};
+  const [f,setF]=useState(init?{...init,amt:init.amt,owed:init.owed,day:init.day}:blank);
+  const [err,setErr]=useState('');
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const submit=()=>{
+    if(!f.name.trim()){setErr(t.nameReq);return;}
+    onSave({...f,id:f.id||genId(),amt:parseFloat(f.amt)||0,owed:parseFloat(f.owed)||0,day:parseInt(f.day)||1});
+  };
+  const inp='w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 transition';
+  const lbl='block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5';
+  return(
+    <div className="space-y-4">
+      {err&&<div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/30 px-3 py-2 rounded-lg">{err}</div>}
+      <div>
+        <label className={lbl}>{t.name} *</label>
+        <input className={inp} value={f.name} onChange={e=>{setErr('');set('name',e.target.value);}}/>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lbl}>{t.account.split(' ')[0]} Cat.</label>
+          <select className={inp} value={f.cat} onChange={e=>set('cat',e.target.value)}>
+            {CATS.map(c=><option key={c} value={c}>{CAT_ICO[c]} {c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={lbl}>{t.currency}</label>
+          <select className={inp} value={f.cur} onChange={e=>set('cur',e.target.value)}>
+            <option>CAD</option><option>MXN</option>
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lbl}>{t.amount}</label>
+          <input type="number" step="0.01" min="0" className={inp} value={f.amt} onChange={e=>set('amt',e.target.value)}/>
+        </div>
+        <div>
+          <label className={lbl}>{t.totalOwedF}</label>
+          <input type="number" step="0.01" min="0" className={inp} value={f.owed} onChange={e=>set('owed',e.target.value)}/>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lbl}>{t.payDay}</label>
+          <input type="number" min="1" max="31" className={inp} value={f.day} onChange={e=>set('day',e.target.value)}/>
+        </div>
+        <div>
+          <label className={lbl}>{t.freq}</label>
+          <select className={inp} value={f.freq} onChange={e=>set('freq',e.target.value)}>
+            {FREQS.map(x=><option key={x}>{x}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lbl}>{t.status}</label>
+          <select className={inp} value={f.st} onChange={e=>set('st',e.target.value)}>
+            {STATUSES.map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={lbl}>{t.account}</label>
+          <select className={inp} value={f.acct} onChange={e=>set('acct',e.target.value)}>
+            {ACCTS.map(a=><option key={a}>{a}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className={lbl}>{t.notes}</label>
+        <input className={inp} value={f.notes} onChange={e=>set('notes',e.target.value)}/>
+      </div>
+      <div className="flex gap-3 pt-1">
+        <button onClick={submit} className="flex-1 py-2.5 bg-blue-800 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition">{t.save}</button>
+        <button onClick={onCancel} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold transition">{t.cancel}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────
+function Dashboard({exps,rate,t,lang,month,year,setRate,apiUrl,setApiUrl,onSync,loading,syncMsg}){
+  const months=lang==='es'?MONTHS_ES:MONTHS_EN;
+  const today=new Date().getDate();
+  const [ri,setRi]=useState(rate);
+  const [ai,setAi]=useState(apiUrl);
+  const [showApi,setShowApi]=useState(false);
+  useEffect(()=>setRi(rate),[rate]);
+  useEffect(()=>setAi(apiUrl),[apiUrl]);
+
+  const total=exps.reduce((s,e)=>s+toCAD(e.amt,e.cur,rate),0);
+  const paid =exps.filter(e=>e.st==='Pagado').reduce((s,e)=>s+toCAD(e.amt,e.cur,rate),0);
+  const pend =total-paid;
+  const owed =exps.reduce((s,e)=>s+toCAD(e.owed,e.cur,rate),0);
+  const paidN=exps.filter(e=>e.st==='Pagado').length;
+  const pct  =exps.length?Math.round(paidN/exps.length*100):0;
+
+  const alerts=exps.filter(e=>{const d=e.day-today;return d>=0&&d<=3&&e.st!=='Pagado';}).sort((a,b)=>a.day-b.day);
+
+  const catTotals=CATS.map(c=>({
+    name:c,
+    val:exps.filter(e=>e.cat===c).reduce((s,e)=>s+toCAD(e.amt,e.cur,rate),0)
+  })).filter(x=>x.val>0);
+
+  const card='bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm';
+
+  return(
+    <div className="space-y-5 fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-display text-2xl font-bold">{months[month]} <span className="text-slate-400 font-normal">{year}</span></h2>
+        {!apiUrl&&<span className="text-xs bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-700/40 px-3 py-1.5 rounded-full">{t.demo}</span>}
+      </div>
+
+      {/* Cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        {[
+          {lb:t.totalOwed,val:fmtC(owed,'CAD'), clr:'#dc2626',ic:'💸'},
+          {lb:t.toPay,    val:fmtC(total,'CAD'),clr:'#1d4ed8',ic:'📋'},
+          {lb:t.paid,     val:fmtC(paid,'CAD'), clr:'#059669',ic:'✅'},
+          {lb:t.pending,  val:fmtC(pend,'CAD'), clr:'#d97706',ic:'⏳'},
+        ].map(({lb,val,clr,ic})=>(
+          <div key={lb} className={`${card} border-l-4`} style={{borderLeftColor:clr}}>
+            <div className="flex justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{lb}</span>
+              <span className="text-lg">{ic}</span>
+            </div>
+            <div className="font-display text-xl font-bold" style={{color:clr}}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress */}
+      <div className={card}>
+        <div className="flex justify-between mb-3">
+          <span className="font-semibold text-sm">{t.progress}</span>
+          <span className="text-sm text-slate-400">{paidN} {t.paidOf} {exps.length} · <strong className="text-blue-700 dark:text-blue-400">{pct}%</strong></span>
+        </div>
+        <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-700" style={{width:`${pct}%`,background:'linear-gradient(90deg,#1e40af,#3b82f6)'}}/>
+        </div>
+        {pct===100&&<div className="mt-2 text-sm text-emerald-600 dark:text-emerald-400 font-bold">{t.allPaid}</div>}
+      </div>
+
+      {/* Alerts */}
+      {alerts.length>0&&(
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-2xl p-5">
+          <div className="font-display font-bold text-amber-800 dark:text-amber-400 text-sm mb-3">{t.alerts}</div>
+          <div className="space-y-2">
+            {alerts.map(e=>{
+              const d=e.day-today;
+              const lb=d===0?t.dueToday:d===1?t.dueTomorrow:`${t.dueIn} ${d} ${t.days}`;
+              return(
+                <div key={e.id} className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-amber-900 dark:text-amber-200">{e.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-amber-800 dark:text-amber-300">{fmtC(e.amt,e.cur)}</span>
+                    <span className="text-xs bg-amber-800 text-white px-2 py-0.5 rounded-full font-semibold">{lb}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Category bars */}
+        <div className={card}>
+          <div className="font-semibold text-sm mb-4">{t.byCategory}</div>
+          <div className="space-y-2.5">
+            {catTotals.map(({name,val})=>{
+              const pct2=total>0?Math.round(val/total*100):0;
+              return(
+                <div key={name}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-medium">{CAT_ICO[name]} {name}</span>
+                    <span className="text-slate-400">{fmtC(val,'CAD')} · {pct2}%</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500" style={{width:`${pct2}%`,backgroundColor:CAT_CLR[name]}}/>
+                  </div>
+                </div>
+              );
+            })}
+            {catTotals.length===0&&<div className="text-sm text-slate-400 py-4 text-center">{t.noData}</div>}
+          </div>
+        </div>
+
+        {/* Rate + API */}
+        <div className={`${card} space-y-5`}>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">{t.rate}</label>
+            <div className="flex gap-2">
+              <input type="number" step="0.0001" min="0" value={ri} onChange={e=>setRi(e.target.value)}
+                className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition"/>
+              <button onClick={()=>setRate(parseFloat(ri)||rate)}
+                className="px-4 py-2.5 bg-blue-800 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition">{t.updateRate}</button>
+            </div>
+            <div className="text-xs text-slate-400 mt-1.5">1 MXN = {Number(rate).toFixed(4)} CAD</div>
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+            <button onClick={()=>setShowApi(!showApi)} className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1">
+              🔗 {t.apiConfig} {showApi?'▲':'▼'}
+            </button>
+            {showApi&&(
+              <div className="mt-3 space-y-2">
+                <input placeholder={t.apiUrl} value={ai} onChange={e=>setAi(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition"/>
+                <div className="flex gap-2">
+                  <button onClick={()=>setApiUrl(ai)} className="flex-1 py-2 bg-blue-800 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition">{t.apiSave}</button>
+                  <button onClick={onSync} disabled={loading} className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold transition disabled:opacity-40">{loading?'⟳':t.apiSync}</button>
+                </div>
+                {syncMsg&&<div className="text-xs text-center text-slate-500">{syncMsg}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── EXPENSES VIEW ─────────────────────────────────────────
+function ExpensesView({exps,onToggle,onEdit,onDelete,onAdd,rate,t,lang,month,year}){
+  const months=lang==='es'?MONTHS_ES:MONTHS_EN;
+  const [view,setView]=useState('all');
+  const [fCat,setFCat]=useState('all');
+  const [fSt,setFSt]=useState('all');
+  const [q,setQ]=useState('');
+
+  const filtered=useMemo(()=>{
+    const ql=q.toLowerCase();
+    return exps.filter(e=>{
+      const mC=fCat==='all'||e.cat===fCat;
+      const mS=fSt==='all'||e.st===fSt;
+      const mQ=e.name.toLowerCase().includes(ql)||(e.notes&&e.notes.toLowerCase().includes(ql));
+      const mP=inPeriod(e,view);
+      return mC&&mS&&mQ&&mP;
+    });
+  },[exps,fCat,fSt,q,view]);
+
+  const grouped=useMemo(()=>{
+    const g={};
+    CATS.forEach(c=>{
+      const items=filtered.filter(e=>e.cat===c).sort((a,b)=>a.day-b.day);
+      if(items.length)g[c]=items;
+    });
+    return g;
+  },[filtered]);
+
+  const sel='text-sm px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 transition';
+
+  return(
+    <div className="space-y-5 fade-in">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-display text-2xl font-bold">{months[month]} <span className="text-slate-400 font-normal">{year}</span></h2>
+        <button onClick={onAdd} className="px-4 py-2.5 bg-blue-800 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition shadow-sm">{t.addExp}</button>
+      </div>
+
+      {/* Period tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800">
+        {[['all',t.allMonth],['q1',t.q1],['q2',t.q2]].map(([v,lb])=>(
+          <button key={v} onClick={()=>setView(v)}
+            className={`px-5 py-2.5 text-sm font-semibold transition ${view===v?'tab-on':'tab-off'}`}>{lb}</button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">🔍</span>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder={t.search}
+            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"/>
+        </div>
+        <select value={fCat} onChange={e=>setFCat(e.target.value)} className={sel}>
+          <option value="all">{t.allCats}</option>
+          {CATS.map(c=><option key={c} value={c}>{CAT_ICO[c]} {c}</option>)}
+        </select>
+        <select value={fSt} onChange={e=>setFSt(e.target.value)} className={sel}>
+          <option value="all">{t.allStatus}</option>
+          {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {Object.keys(grouped).length===0?(
+        <div className="py-20 text-center text-slate-400 text-sm">{t.noData}</div>
+      ):(
+        Object.entries(grouped).map(([cat,items])=>{
+          const catTotal=items.reduce((s,e)=>s+toCAD(e.amt,e.cur,rate),0);
+          const catPaid=items.filter(e=>e.st==='Pagado').length;
+          return(
+            <div key={cat} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="px-5 py-3 flex items-center gap-3" style={{backgroundColor:CAT_CLR[cat]+'18'}}>
+                <span className="text-lg">{CAT_ICO[cat]}</span>
+                <span className="font-display font-bold text-sm" style={{color:CAT_CLR[cat]}}>{cat}</span>
+                <span className="text-xs text-slate-400">{catPaid}/{items.length} {t.items}</span>
+                <span className="ml-auto font-bold text-sm" style={{color:CAT_CLR[cat]}}>{fmtC(catTotal,'CAD')}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50/80 dark:bg-slate-800/50 text-xs font-semibold text-slate-400 uppercase tracking-wide text-left">
+                      <th className="pl-4 pr-2 py-2.5 w-8"></th>
+                      <th className="px-3 py-2.5">{t.name}</th>
+                      <th className="px-3 py-2.5 text-right">{t.amount}</th>
+                      <th className="px-3 py-2.5 text-right hidden sm:table-cell">{t.totalOwedF}</th>
+                      <th className="px-3 py-2.5 text-center hidden sm:table-cell">Día</th>
+                      <th className="px-3 py-2.5 hidden lg:table-cell">{t.freq}</th>
+                      <th className="px-3 py-2.5 hidden xl:table-cell">{t.account}</th>
+                      <th className="px-3 py-2.5 text-center">{t.status}</th>
+                      <th className="px-3 py-2.5 w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(e=>(
+                      <tr key={e.id} className={`group border-t border-slate-100 dark:border-slate-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors ${e.st==='Pagado'?'opacity-50':''}`}>
+                        <td className="pl-4 pr-2 py-3 text-center">
+                          <input type="checkbox" checked={e.st==='Pagado'} onChange={()=>onToggle(e.id)}
+                            className="w-4 h-4 cursor-pointer accent-blue-700"/>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="font-semibold text-sm">{e.name}</div>
+                          {e.notes&&<div className="text-xs text-slate-400 italic mt-0.5">{e.notes}</div>}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <div className="text-sm font-bold whitespace-nowrap">{fmtC(e.amt,e.cur)}</div>
+                          {e.cur==='MXN'&&<div className="text-xs text-slate-400">{fmtC(toCAD(e.amt,e.cur,rate),'CAD')}</div>}
+                        </td>
+                        <td className="px-3 py-3 text-right hidden sm:table-cell">
+                          {e.owed>0?<span className="text-sm text-slate-500">{fmtC(e.owed,e.cur)}</span>:<span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
+                        <td className="px-3 py-3 text-center hidden sm:table-cell">
+                          <span className="text-sm text-slate-500 font-medium">D{e.day}</span>
+                        </td>
+                        <td className="px-3 py-3 hidden lg:table-cell">
+                          <span className="text-xs text-slate-400">{e.freq}</span>
+                        </td>
+                        <td className="px-3 py-3 hidden xl:table-cell">
+                          <span className="text-xs text-slate-500">{e.acct}</span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${stCls(e.st)}`}>
+                            {e.st==='Pendiente'?t.pending:e.st==='Pagado'?t.paid:t.overdue}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <button onClick={()=>onEdit(e)} className="p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 transition text-sm">✏</button>
+                            <button onClick={()=>onDelete(e.id)} className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 text-red-500 transition text-sm">✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+// ── HISTORY ───────────────────────────────────────────────
+function HistoryView({hist,t,lang}){
+  const months=lang==='es'?MONTHS_ES:MONTHS_EN;
+  if(!hist.length)return(
+    <div className="py-24 text-center text-slate-400 fade-in">
+      <div className="text-5xl mb-3">📅</div>
+      <div className="text-sm">{t.noData}</div>
+    </div>
+  );
+  return(
+    <div className="space-y-4 fade-in">
+      <h2 className="font-display text-2xl font-bold">{t.histTitle}</h2>
+      {hist.map((h,i)=>(
+        <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <div className="font-display font-bold">{months[h.month]} {h.year}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{h.items?.length||0} {t.items}</div>
+            </div>
+            <div className="text-right">
+              <div className="font-display text-xl font-bold text-emerald-600 dark:text-emerald-400">{fmtC(h.totalPaid||0,'CAD')}</div>
+              <div className="text-xs text-slate-400">{t.histTotal}</div>
+            </div>
+          </div>
+          {h.items?.length>0&&(
+            <div className="p-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {h.items.map((it,j)=>(
+                    <tr key={j}>
+                      <td className="py-2 font-medium">{it.name}</td>
+                      <td className="py-2 text-xs text-slate-400">{it.cat}</td>
+                      <td className="py-2 text-right font-bold">{fmtC(it.amt,it.cur)}</td>
+                      <td className="py-2 text-right">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${stCls(it.st)}`}>{it.st}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── SETUP GUIDE ───────────────────────────────────────────
+function SetupGuide({t}){
+  const [copied,setCopied]=useState(false);
+  const copy=()=>{navigator.clipboard.writeText(SCRIPT_CODE).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});};
+  return(
+    <div className="space-y-5 fade-in max-w-3xl">
+      <h2 className="font-display text-2xl font-bold">⚙ {t.apiConfig}</h2>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+        <div>
+          <div className="font-display font-bold mb-1">{t.instructions}</div>
+          <ol className="space-y-3 text-sm text-slate-700 dark:text-slate-300 mt-3">
+            {[
+              <span>Ve a <a href="https://sheets.google.com" target="_blank" className="text-blue-600 underline font-medium">sheets.google.com</a> y crea una hoja nueva.</span>,
+              <span>Menú: <strong>Extensiones → Apps Script</strong>.</span>,
+              <span>Borra el código existente y pega el código de abajo.</span>,
+              <span>Haz clic en <strong>Implementar → Nueva implementación</strong>.</span>,
+              <span>Tipo: <strong>Aplicación web</strong> · Ejecutar como: <strong>Yo</strong> · Acceso: <strong>Cualquier persona</strong>.</span>,
+              <span>Autoriza los permisos y copia la <strong>URL de implementación</strong>.</span>,
+              <span>En tu tracker: <strong>Dashboard → Conectar Google Sheets</strong> → pega la URL → Guardar.</span>,
+            ].map((s,i)=>(
+              <li key={i} className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-800 text-white text-xs flex items-center justify-center font-bold mt-0.5">{i+1}</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Code.gs — Apps Script</span>
+            <button onClick={copy} className="text-xs px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-white rounded-lg font-semibold transition">
+              {copied?t.copied:t.copyCode}
+            </button>
+          </div>
+          <pre className="bg-slate-950 text-emerald-400 text-xs p-4 rounded-xl overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72">{SCRIPT_CODE}</pre>
+        </div>
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300">
+          <strong>💡</strong> Una vez configurado, cualquier persona con la URL de tu página verá y editará los mismos datos en tiempo real.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────
+function App(){
+  const now=new Date();
+  const [lang,setLang]=useState('es');
+  const [tab,setTab]=useState('dashboard');
+  const [month,setMonth]=useState(now.getMonth());
+  const [year,setYear]=useState(now.getFullYear());
+  const [loading,setLoading]=useState(false);
+  const [syncMsg,setSyncMsg]=useState('');
+
+  const load=(key,def)=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):def;}catch{return def;}};
+
+  const [exps,setExps]=useState(()=>load('xp_e',INIT));
+  const [hist,setHist]=useState(()=>load('xp_h',[]));
+  const [rate,setRateS]=useState(()=>parseFloat(localStorage.getItem('xp_r'))||0.073);
+  const [apiUrl,setApiUrlS]=useState(()=>localStorage.getItem('xp_api')||'');
+
+  const [showForm,setShowForm]=useState(false);
+  const [editE,setEditE]=useState(null);
+  const [delId,setDelId]=useState(null);
+
+  const t=TR[lang];
+
+  // Dark mode auto
+  useEffect(()=>{
+    const mq=window.matchMedia('(prefers-color-scheme: dark)');
+    const apply=ev=>document.documentElement.classList.toggle('dark',ev.matches);
+    apply(mq);mq.addEventListener('change',apply);
+    return()=>mq.removeEventListener('change',apply);
+  },[]);
+
+  // Persist
+  useEffect(()=>{try{localStorage.setItem('xp_e',JSON.stringify(exps));}catch{};},[exps]);
+  useEffect(()=>{try{localStorage.setItem('xp_h',JSON.stringify(hist));}catch{};},[hist]);
+  useEffect(()=>{try{localStorage.setItem('xp_r',String(rate));}catch{};},[rate]);
+  useEffect(()=>{try{localStorage.setItem('xp_api',apiUrl);}catch{};},[apiUrl]);
+
+  const pushData=useCallback(async(data)=>{
+    if(!apiUrl)return;
+    try{await fetch(`${apiUrl}?action=write&data=${encodeURIComponent(JSON.stringify(data))}`);}catch{}
+  },[apiUrl]);
+
+  const syncData=useCallback(async()=>{
+    if(!apiUrl)return;
+    setLoading(true);setSyncMsg('');
+    try{
+      const r=await fetch(`${apiUrl}?action=read`);
+      const d=await r.json();
+      if(d.expenses?.length>0){
+        setExps(d.expenses.map(e=>({...e,amt:parseFloat(e.amt)||0,owed:parseFloat(e.owed)||0,day:parseInt(e.day)||1})));
+        setSyncMsg(t.syncOk);
+      }
+    }catch{setSyncMsg(t.syncFail);}
+    finally{setLoading(false);setTimeout(()=>setSyncMsg(''),3000);}
+  },[apiUrl,t]);
+
+  useEffect(()=>{if(apiUrl)syncData();},[apiUrl]);
+
+  const upd=(next)=>{setExps(next);pushData(next);};
+
+  const setRate=(v)=>setRateS(v);
+  const setApiUrl=(v)=>setApiUrlS(v);
+
+  const handleToggle=(id)=>upd(exps.map(e=>e.id!==id?e:{...e,st:e.st==='Pagado'?'Pendiente':'Pagado'}));
+  const handleSave=(e)=>{
+    const next=exps.find(x=>x.id===e.id)?exps.map(x=>x.id===e.id?e:x):[...exps,e];
+    upd(next);setShowForm(false);setEditE(null);
+  };
+  const handleDel=(id)=>{upd(exps.filter(e=>e.id!==id));setDelId(null);};
+  const handleEdit=(e)=>{setEditE(e);setShowForm(true);};
+
+  const handleNewPeriod=()=>{
+    if(!window.confirm(t.confirmPeriod))return;
+    const snap={
+      month,year,
+      totalPaid:exps.filter(e=>e.st==='Pagado').reduce((s,e)=>s+toCAD(e.amt,e.cur,rate),0),
+      items:exps.map(e=>({name:e.name,cat:e.cat,amt:e.amt,cur:e.cur,st:e.st}))
+    };
+    setHist(h=>[snap,...h]);
+    const nm=month===11?0:month+1,ny=month===11?year+1:year;
+    upd(exps.map(e=>({...e,st:'Pendiente'})));
+    setMonth(nm);setYear(ny);
+    if(apiUrl)try{fetch(`${apiUrl}?action=history&data=${encodeURIComponent(JSON.stringify(snap))}`);}catch{}
+  };
+
+  const TABS=[
+    {id:'dashboard',lb:t.dashboard},
+    {id:'expenses', lb:t.expenses},
+    {id:'history',  lb:t.history},
+    {id:'setup',    lb:'⚙'},
+  ];
+  const months=lang==='es'?MONTHS_ES:MONTHS_EN;
+
+  return(
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {/* HEADER */}
+      <header className="sticky top-0 z-40 shadow-lg" style={{background:'linear-gradient(135deg,#0f172a 0%,#1e3a6e 55%,#1d4ed8 100%)'}}>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center justify-between py-3 gap-3">
+            <div className="flex items-center gap-2.5 flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">💰</div>
+              <span className="font-display font-bold text-white text-lg hidden sm:block">{t.appTitle}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select value={month} onChange={e=>setMonth(parseInt(e.target.value))}
+                className="text-sm bg-white/10 border border-white/20 text-white rounded-xl px-3 py-1.5 cursor-pointer focus:outline-none">
+                {months.map((m,i)=><option key={i} value={i} className="text-slate-900 bg-white">{m}</option>)}
+              </select>
+              <select value={year} onChange={e=>setYear(parseInt(e.target.value))}
+                className="text-sm bg-white/10 border border-white/20 text-white rounded-xl px-2 py-1.5 w-20 cursor-pointer focus:outline-none">
+                {[2024,2025,2026,2027].map(y=><option key={y} className="text-slate-900 bg-white">{y}</option>)}
+              </select>
+              <button onClick={handleNewPeriod} className="hidden sm:block px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl text-sm font-semibold transition">
+                {t.newPeriod}
+              </button>
+              <button onClick={()=>setLang(l=>l==='es'?'en':'es')}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl text-xs font-bold transition">
+                {lang==='es'?'EN':'ES'}
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-1 overflow-x-auto" style={{scrollbarWidth:'none'}}>
+            {TABS.map(({id,lb})=>(
+              <button key={id} onClick={()=>setTab(id)}
+                className={`px-5 py-2.5 text-sm font-semibold whitespace-nowrap transition ${tab===id?'tab-on':'tab-off'}`}>{lb}</button>
+            ))}
+            {loading&&<span className="self-center ml-2 text-xs text-blue-300 animate-pulse">⟳ Sync...</span>}
+          </div>
+        </div>
+      </header>
+
+      {/* CONTENT */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {tab==='dashboard'&&<Dashboard exps={exps} rate={rate} t={t} lang={lang} month={month} year={year}
+          setRate={setRate} apiUrl={apiUrl} setApiUrl={setApiUrl} onSync={syncData} loading={loading} syncMsg={syncMsg}/>}
+        {tab==='expenses'&&<ExpensesView exps={exps} onToggle={handleToggle} onEdit={handleEdit}
+          onDelete={setDelId} onAdd={()=>{setEditE(null);setShowForm(true);}} rate={rate} t={t} lang={lang} month={month} year={year}/>}
+        {tab==='history'&&<HistoryView hist={hist} t={t} lang={lang}/>}
+        {tab==='setup'&&<SetupGuide t={t}/>}
+      </main>
+
+      {showForm&&(
+        <Modal title={editE?t.editExp:t.addExp} onClose={()=>{setShowForm(false);setEditE(null);}}>
+          <ExpForm init={editE} onSave={handleSave} onCancel={()=>{setShowForm(false);setEditE(null);}} t={t}/>
+        </Modal>
+      )}
+
+      {delId&&(
+        <Modal title={t.deleteQ} onClose={()=>setDelId(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">{t.deleteQ}</p>
+            <div className="flex gap-3">
+              <button onClick={()=>handleDel(delId)} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition">{t.deleteBtn}</button>
+              <button onClick={()=>setDelId(null)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold transition">{t.cancel}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+const root=ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
+</body>
+</html>
